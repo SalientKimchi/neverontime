@@ -349,8 +349,10 @@ function selectStation(side, s) {
   else selTo=obj;
 }
 
-setupAC('from');
-setupAC('to');
+document.addEventListener('DOMContentLoaded', function() {
+  setupAC('from');
+  setupAC('to');
+});
 
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.ac-wrap')) {
