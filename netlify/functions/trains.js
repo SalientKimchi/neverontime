@@ -1,5 +1,3 @@
-// Netlify function — Darwin LDB proxy
-// Darwin LDB SOAP API v2021-11-01
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -10,7 +8,7 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: '' };
   }
 
-  const { from, to } = event.queryStringParameters || {};
+  const { from, to, time } = event.queryStringParameters || {};
 
   if (!from || !to) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing from/to' }) };
@@ -19,6 +17,21 @@ exports.handler = async (event) => {
   const TOKEN = process.env.DARWIN_TOKEN;
   if (!TOKEN) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Token not configured' }) };
+  }
+
+  // Calculate time offset from now if time provided
+  let timeOffset = 0;
+  let timeWindow = 120;
+  if (time && time.length === 4) {
+    const reqHour = parseInt(time.slice(0, 2));
+    const reqMin = parseInt(time.slice(2, 4));
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const reqMins = reqHour * 60 + reqMin;
+    timeOffset = reqMins - nowMins;
+    // Clamp to Darwin's allowed range (-120 to 120)
+    timeOffset = Math.max(-120, Math.min(120, timeOffset));
+    timeWindow = 90;
   }
 
   const soapBody = `<?xml version="1.0" encoding="utf-8"?>
@@ -37,8 +50,8 @@ exports.handler = async (event) => {
       <ldb:crs>${from.toUpperCase()}</ldb:crs>
       <ldb:filterCrs>${to.toUpperCase()}</ldb:filterCrs>
       <ldb:filterType>to</ldb:filterType>
-      <ldb:timeOffset>-120</ldb:timeOffset>
-      <ldb:timeWindow>240</ldb:timeWindow>
+      <ldb:timeOffset>${timeOffset}</ldb:timeOffset>
+      <ldb:timeWindow>${timeWindow}</ldb:timeWindow>
     </ldb:GetDepBoardWithDetailsRequest>
   </soap:Body>
 </soap:Envelope>`;
@@ -54,12 +67,9 @@ exports.handler = async (event) => {
     });
 
     const xml = await response.text();
+    console.log('Darwin response status:', response.status);
+    console.log('Darwin XML snippet:', xml.slice(0, 800));
 
-    if (!response.ok) {
-      return { statusCode: response.status, headers, body: JSON.stringify({ error: 'Darwin error', xml: xml.slice(0, 500) }) };
-    }
-
-    // Parse services
     const services = [];
     const regex = /<(?:\w+:)?service\b[^>]*>([\s\S]*?)<\/(?:\w+:)?service>/g;
     let match;
@@ -76,9 +86,7 @@ exports.handler = async (event) => {
       const platform = get('platform');
       const operator = get('operator');
       const serviceID = get('serviceID');
-      const isCancelled = /isCancelled="true"/.test(block) || /isCircularRoute/.test(block) && get('etd') === 'Cancelled';
-
-      // Get destination name
+      const isCancelled = /isCancelled="true"/.test(block);
       const destMatch = block.match(/<(?:\w+:)?destination[^>]*>[\s\S]*?<(?:\w+:)?locationName>(.*?)<\/(?:\w+:)?locationName>/);
       const destination = destMatch ? destMatch[1] : to.toUpperCase();
 
@@ -87,15 +95,10 @@ exports.handler = async (event) => {
       }
     }
 
-    // If no services parsed, return raw snippet for debugging
-    if (!services.length) {
-      const snippet = xml.slice(0, 1000);
-      return { statusCode: 200, headers, body: JSON.stringify({ services: [], debug: snippet }) };
-    }
-
-    return { statusCode: 200, headers, body: JSON.stringify({ services }) };
+    return { statusCode: 200, headers, body: JSON.stringify({ services, timeOffset, debug: services.length === 0 ? xml.slice(0, 800) : null }) };
 
   } catch (err) {
+    console.error('Error:', err.message);
     return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
   }
 };
