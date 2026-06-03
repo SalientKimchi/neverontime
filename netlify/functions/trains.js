@@ -28,7 +28,6 @@ exports.handler = async (event) => {
     timeWindow = 90;
   }
 
-  // Known good SOAP format from confirmed working examples
   const soapBody = `<?xml version="1.0" encoding="utf-8"?>
 <SOAP-ENV:Envelope 
   xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
@@ -52,11 +51,11 @@ exports.handler = async (event) => {
 </SOAP-ENV:Envelope>`;
 
   try {
+    // No SOAPAction header — some implementations work without it
     const response = await fetch('https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx', {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': 'http://thalesgroup.com/RTTI/2014-02-20/ldb/GetDepartureBoard',
       },
       body: soapBody,
     });
@@ -95,7 +94,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         services,
         timeOffset,
-        debug: services.length === 0 ? xml.slice(0, 1200) : null
+        debug: xml.slice(0, 1200)
       })
     };
 
