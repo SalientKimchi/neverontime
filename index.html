@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#0f0f1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>NeverOnTime — Claim Your Delay Repay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#0f0f1a;--surface:#1a1a2e;--surface2:#22223b;
+      --accent:#f72585;--accent2:#4cc9f0;--text:#f0f0f0;
+      --muted:#8888aa;--success:#06d6a0;--warn:#ffd166;--radius:16px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:0 0 60px;}
+    header{width:100%;max-width:512px;padding:28px 24px 0;}
+    .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:1.5rem;letter-spacing:-0.5px;}
+    .logo span{color:var(--accent);}
+    .tagline{font-size:0.78rem;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-top:3px;}
+    .card{background:var(--surface);border-radius:var(--radius);padding:24px;margin:20px 16px 0;width:calc(100% - 32px);max-width:480px;}
+    .step-label{font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--accent2);margin-bottom:10px;font-weight:500;}
+    .card h2{font-family:'Syne',sans-serif;font-size:1.15rem;font-weight:700;margin-bottom:22px;line-height:1.3;}
+    .field{margin-bottom:16px;position:relative;}
+    label{display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:0.5px;}
+    .req{color:var(--accent);font-size:0.7rem;}
+    .opt{background:var(--muted);border-radius:4px;font-size:0.6rem;padding:1px 5px;letter-spacing:0.5px;text-transform:uppercase;color:var(--bg);opacity:0.7;}
+    input[type=text],input[type=time],input[type=number],select{width:100%;background:var(--surface2);border:1.5px solid transparent;border-radius:10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:1rem;padding:13px 16px;outline:none;transition:border-color 0.2s;-webkit-appearance:none;appearance:none;}
+    select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888aa' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;padding-right:40px;}
+    input:focus,select:focus{border-color:var(--accent2);}
+    input::placeholder{color:var(--muted);opacity:0.6;}
+    input[type=number]{-moz-appearance:textfield;}
+    input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
+    .ac-wrap{position:relative;}
+    .ac-list{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface2);border:1.5px solid var(--accent2);border-radius:10px;max-height:200px;overflow-y:auto;z-index:100;display:none;}
+    .ac-list.open{display:block;}
+    .ac-item{padding:11px 16px;cursor:pointer;font-size:0.92rem;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;align-items:center;}
+    .ac-item:last-child{border-bottom:none;}
+    .ac-item:hover,.ac-item.hi{background:rgba(76,201,240,0.12);}
+    .ac-toc{font-size:0.68rem;color:var(--accent2);opacity:0.8;}
+    .confirmed{display:none;background:rgba(6,214,160,0.1);border:1px solid rgba(6,214,160,0.3);border-radius:8px;padding:8px 12px;font-size:0.82rem;color:var(--success);margin-top:6px;align-items:center;gap:6px;}
+    .confirmed.show{display:flex;}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .two-col .field{margin-bottom:0;}
+    .price-wrap{position:relative;}
+    .price-wrap::before{content:'£';position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;}
+    .price-wrap input{padding-left:26px;}
+    .season-hint{background:var(--surface2);border-radius:10px;padding:12px 14px;font-size:0.8rem;color:var(--muted);line-height:1.5;margin-top:8px;display:none;}
+    .season-hint strong{color:var(--accent2);}
+    .divider{border:none;border-top:1px solid rgba(255,255,255,0.06);margin:20px 0;}
+    .error-msg{color:var(--accent);font-size:0.8rem;margin-bottom:12px;display:none;}
+    .btn{width:100%;background:var(--accent);color:white;border:none;border-radius:12px;font-family:'Syne',sans-serif;font-weight:700;font-size:1.05rem;padding:16px;cursor:pointer;margin-top:20px;transition:opacity 0.15s,transform 0.1s;}
+    .btn:active{opacity:0.85;transform:scale(0.98);}
+    .result-card{background:var(--surface);border-radius:var(--radius);margin:20px 16px 0;width:calc(100% - 32px);max-width:480px;overflow:hidden;display:none;}
+    .result-header{background:linear-gradient(135deg,#1a1a4e,#2a1a3e);padding:32px 24px;text-align:center;}
+    .result-verdict{font-size:0.72rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;}
+    .result-amount{font-family:'Syne',sans-serif;font-size:3.5rem;font-weight:800;color:var(--success);line-height:1;margin-bottom:8px;}
+    .result-amount.zero{color:var(--muted);font-size:2rem;}
+    .result-tier{font-size:0.85rem;color:var(--muted);}
+    .result-body{padding:20px 24px;}
+    .op-badge{display:inline-block;background:var(--surface2);border-radius:6px;padding:3px 8px;font-size:0.7rem;color:var(--accent2);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:16px;}
+    .drow{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:0.88rem;}
+    .drow:last-child{border-bottom:none;}
+    .dl{color:var(--muted);}
+    .dv{font-weight:500;}
+    .dv.warn{color:var(--warn);}
+    .dv.blue{color:var(--accent2);}
+    .claim-btn{display:block;width:calc(100% - 48px);margin:4px 24px 16px;background:var(--accent);color:white;border:none;border-radius:12px;font-family:'Syne',sans-serif;font-weight:700;font-size:1rem;padding:16px;text-align:center;text-decoration:none;cursor:pointer;transition:opacity 0.15s;}
+    .claim-btn:active{opacity:0.85;}
+    .claim-btn.disabled{background:var(--surface2);color:var(--muted);pointer-events:none;}
+    .reset-link{display:block;text-align:center;color:var(--muted);font-size:0.82rem;padding:8px 24px 20px;cursor:pointer;text-decoration:underline;}
+    .hidden{display:none!important;}
+    .train-anim{display:inline-block;animation:chug 2.5s infinite ease-in-out;}
+    @keyframes chug{0%,100%{transform:translateX(0)}30%{transform:translateX(4px)}70%{transform:translateX(-2px)}}
+    footer{margin-top:40px;text-align:center;color:var(--muted);font-size:0.72rem;padding:0 24px;line-height:1.8;max-width:480px;}
+    footer a{color:var(--muted);}
+    .claim-btn.secondary{background:transparent;border:1.5px solid var(--accent2);color:var(--accent2);}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Never<span>OnTime</span>.uk</div>
+  <div class="tagline">Delay Repay — sorted in 60 seconds</div>
+</header>
+
+<div class="card" id="formCard">
+  <div class="step-label">Your journey</div>
+  <h2>What happened? <span class="train-anim">🚂</span></h2>
+
+  <div class="field">
+    <label>From <span class="req">required</span></label>
+    <div class="ac-wrap">
+      <input type="text" id="fromInput" placeholder="e.g. Brighton" autocomplete="off">
+      <div class="ac-list" id="fromList"></div>
+    </div>
+    <div class="confirmed" id="fromConf"><span>✓</span><span id="fromConfTxt"></span></div>
+  </div>
+
+  <div class="field">
+    <label>To <span class="req">required</span></label>
+    <div class="ac-wrap">
+      <input type="text" id="toInput" placeholder="e.g. London Victoria" autocomplete="off">
+      <div class="ac-list" id="toList"></div>
+    </div>
+    <div class="confirmed" id="toConf"><span>✓</span><span id="toConfTxt"></span></div>
+  </div>
+
+  <div class="two-col">
+    <div class="field">
+      <label>Ticket type <span class="req">required</span></label>
+      <select id="ticketType" onchange="onTicketChange()">
+        <option value="anytime_return">Anytime Return</option>
+        <option value="anytime_single">Anytime Single</option>
+        <option value="offpeak_return">Off-Peak Return</option>
+        <option value="offpeak_single">Off-Peak Single</option>
+        <option value="superoffpeak_return">Super Off-Peak Return</option>
+        <option value="superoffpeak_single">Super Off-Peak Single</option>
+        <option value="advance_single">Advance Single</option>
+        <option value="season_weekly">Season — Weekly</option>
+        <option value="season_monthly">Season — Monthly</option>
+        <option value="season_annual">Season — Annual</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Passengers <span class="req">required</span></label>
+      <input type="number" id="passengers" value="1" min="1" max="9">
+    </div>
+  </div>
+
+  <div class="field">
+    <label id="priceLbl">Ticket price <span class="req">required</span></label>
+    <div class="price-wrap">
+      <input type="number" id="ticketPrice" placeholder="23.80" step="0.01" min="0">
+    </div>
+  </div>
+  <div class="season-hint" id="seasonHint">
+    <strong>Season ticket compensation</strong> is based on your daily fare. Enter your weekly ticket cost above.
+  </div>
+
+  <hr class="divider">
+
+  <div class="two-col">
+    <div class="field">
+      <label>Scheduled departure <span class="req">required</span></label>
+      <input type="time" id="schedDep">
+    </div>
+    <div class="field">
+      <label>Actual departure <span class="opt">optional</span></label>
+      <input type="time" id="actDep">
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="field">
+      <label>Scheduled arrival <span class="opt">optional</span></label>
+      <input type="time" id="schedArr">
+    </div>
+    <div class="field">
+      <label>Actual arrival <span class="req">required</span></label>
+      <input type="time" id="actArr">
+    </div>
+  </div>
+
+  <div class="error-msg" id="errMsg"></div>
+  <button class="btn" onclick="calculate()">Calculate my claim →</button>
+</div>
+
+<div class="result-card" id="resultCard">
+  <div class="result-header">
+    <div class="result-verdict">Estimated compensation</div>
+    <div class="result-amount" id="resAmt"></div>
+    <div class="result-tier" id="resTier"></div>
+  </div>
+  <div class="result-body">
+    <div class="op-badge" id="opBadge"></div>
+    <div class="drow"><span class="dl">Route</span><span class="dv" id="dRoute"></span></div>
+    <div class="drow"><span class="dl">Ticket</span><span class="dv" id="dTicket"></span></div>
+    <div class="drow"><span class="dl">Delay at destination</span><span class="dv warn" id="dDelay"></span></div>
+    <div class="drow"><span class="dl">Compensation rate</span><span class="dv blue" id="dRate"></span></div>
+    <div class="drow"><span class="dl">Per passenger</span><span class="dv" id="dPer"></span></div>
+    <div class="drow" id="dTotalRow"><span class="dl">Total (×<span id="dPax"></span> passengers)</span><span class="dv" id="dTotal"></span></div>
+  </div>
+
+  <div id="claimOptions" style="padding:0 24px 8px;">
+    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px;">How would you like to claim?</div>
+
+    <a id="claimOnline" class="claim-btn" target="_blank" rel="noopener" style="margin:0 0 10px;width:100%;display:block;">
+      🌐 Claim online →
+    </a>
+    <div id="guestNote" style="display:none;font-size:0.75rem;color:var(--success);margin:-6px 0 10px;padding:0 2px;">
+      ✓ No account needed — this operator supports guest claims
+    </div>
+
+    <a id="claimPost" class="claim-btn" target="_blank" rel="noopener" style="margin:0 0 6px;width:100%;display:block;background:transparent;border:1.5px solid var(--accent2);color:var(--accent2);">
+      ✉ Download postal form
+    </a>
+    <div id="freepostAddr" style="font-size:0.75rem;color:var(--muted);margin-bottom:4px;padding:0 2px;line-height:1.5;"></div>
+    <div id="postalNote" style="font-size:0.72rem;color:var(--warn);padding:0 2px;margin-bottom:16px;">
+      ⚠ Postal claims: National Rail vouchers only, slower processing
+    </div>
+    <div id="noPostNote" style="display:none;font-size:0.75rem;color:var(--muted);margin-bottom:16px;padding:0 2px;">
+      This operator doesn't publish a postal form — claim online.
+    </div>
+  </div>
+
+  <div id="notEligible" style="display:none;padding:0 24px 20px;">
+    <div class="claim-btn disabled">Not eligible for Delay Repay</div>
+  </div>
+
+  <div class="reset-link" onclick="reset()">← Start a new claim</div>
+</div>
+
+<footer>
+  NeverOnTime.uk calculates and routes your Delay Repay claim.<br>
+  No data stored. Claim within 28 days of travel.<br><br>
+  <a href="#">About</a> · <a href="#">All operators</a>
+</footer>
+
+<script>
+// Curated station list for preview — full 2841-station version loads from stations.js on deployment
+const STATIONS = [
+  ["Aberdeen","ABD","ScotRail","https://www.scotrail.co.uk/help/delay-repay",null,null,false],
+  ["Bath Spa","BTH","Great Western Railway","https://www.gwr.com/help-and-support/refunds-and-compensation/delay-repay","https://www.gwr.com/globalassets/documents/refunds/delay-repay-claim-form.pdf","Freepost GWR Customer Support",false],
+  ["Bedford","BDM","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Birmingham New Street","BHM","West Midlands Railway","https://www.westmidlandsrailway.co.uk/help/delay-repay",null,null,false],
+  ["Birmingham Moor Street","BMO","Chiltern Railways","https://www.chilternrailways.co.uk/help/delays-compensation",null,null,false],
+  ["Blackfriars","BFR","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Brighton","BTN","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Bristol Parkway","BPW","Great Western Railway","https://www.gwr.com/help-and-support/refunds-and-compensation/delay-repay","https://www.gwr.com/globalassets/documents/refunds/delay-repay-claim-form.pdf","Freepost GWR Customer Support",false],
+  ["Bristol Temple Meads","BRI","Great Western Railway","https://www.gwr.com/help-and-support/refunds-and-compensation/delay-repay","https://www.gwr.com/globalassets/documents/refunds/delay-repay-claim-form.pdf","Freepost GWR Customer Support",false],
+  ["Cambridge","CBG","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Cardiff Central","CDF","Transport for Wales","https://www.tfwrail.wales/help-and-support/compensation/delay-repay",null,null,false],
+  ["Clapham Junction","CLJ","South Western Railway","https://www.southwesternrailway.com/help-and-support/compensation/delay-repay",null,null,false],
+  ["Crawley","CRW","Southern","https://delayrepay.southernrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["East Croydon","ECR","Southern","https://delayrepay.southernrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Edinburgh","EDB","ScotRail","https://www.scotrail.co.uk/help/delay-repay",null,null,false],
+  ["Exeter St Davids","EXD","Great Western Railway","https://www.gwr.com/help-and-support/refunds-and-compensation/delay-repay","https://www.gwr.com/globalassets/documents/refunds/delay-repay-claim-form.pdf","Freepost GWR Customer Support",false],
+  ["Gatwick Airport","GTW","Southern","https://delayrepay.southernrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Glasgow Central","GLC","ScotRail","https://www.scotrail.co.uk/help/delay-repay",null,null,false],
+  ["Guildford","GLD","South Western Railway","https://www.southwesternrailway.com/help-and-support/compensation/delay-repay",null,null,false],
+  ["Haywards Heath","HHE","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Hove","HOV","Southern","https://delayrepay.southernrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Leeds","LDS","TransPennine Express","https://www.tpexpress.co.uk/help/compensation",null,null,false],
+  ["Leicester","LEI","East Midlands Railway","https://www.eastmidlandsrailway.co.uk/help-and-support/compensation/delay-repay",null,null,false],
+  ["Liverpool Central","LVC","Merseyrail","https://www.merseyrail.org/your-journey/compensation.aspx",null,null,false],
+  ["Liverpool Lime Street","LIV","TransPennine Express","https://www.tpexpress.co.uk/help/compensation",null,null,false],
+  ["London Blackfriars","BFR","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["London Bridge","LBG","Southeastern","https://www.southeasternrailway.co.uk/help-and-support/delay-repay","https://www.southeasternrailway.co.uk/globalassets/documents/help-and-support/delay-repay-form.pdf","Freepost SOUTHEASTERN RAILWAY",true],
+  ["London Cannon Street","CST","Southeastern","https://www.southeasternrailway.co.uk/help-and-support/delay-repay","https://www.southeasternrailway.co.uk/globalassets/documents/help-and-support/delay-repay-form.pdf","Freepost SOUTHEASTERN RAILWAY",true],
+  ["London Charing Cross","CHX","Southeastern","https://www.southeasternrailway.co.uk/help-and-support/delay-repay","https://www.southeasternrailway.co.uk/globalassets/documents/help-and-support/delay-repay-form.pdf","Freepost SOUTHEASTERN RAILWAY",true],
+  ["London Euston","EUS","Avanti West Coast","https://www.avantitrain.co.uk/help/compensation/delay-repay",null,null,false],
+  ["London Fenchurch Street","FST","c2c","https://c2c-online.co.uk/help-support/compensation/delay-repay/",null,null,false],
+  ["London Farringdon","ZFD","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["London Kings Cross","KGX","LNER","https://www.lner.co.uk/help/delays-and-disruption/delay-repay/",null,null,false],
+  ["London Liverpool Street","LST","Greater Anglia","https://www.greateranglia.co.uk/help-and-support/delay-repay",null,null,false],
+  ["London Marylebone","MYB","Chiltern Railways","https://www.chilternrailways.co.uk/help/delays-compensation",null,null,false],
+  ["London Paddington","PAD","Great Western Railway","https://www.gwr.com/help-and-support/refunds-and-compensation/delay-repay","https://www.gwr.com/globalassets/documents/refunds/delay-repay-claim-form.pdf","Freepost GWR Customer Support",false],
+  ["London St Pancras International","STP","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["London Victoria","VIC","Southern","https://delayrepay.southernrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["London Waterloo","WAT","South Western Railway","https://www.southwesternrailway.com/help-and-support/compensation/delay-repay",null,null,false],
+  ["Luton","LUT","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Luton Airport Parkway","LTN","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Manchester Piccadilly","MAN","TransPennine Express","https://www.tpexpress.co.uk/help/compensation",null,null,false],
+  ["Manchester Victoria","MCV","Northern","https://www.northernrailway.co.uk/help/compensation/delay-repay",null,null,false],
+  ["Milton Keynes Central","MKC","Avanti West Coast","https://www.avantitrain.co.uk/help/compensation/delay-repay",null,null,false],
+  ["Norwich","NRW","Greater Anglia","https://www.greateranglia.co.uk/help-and-support/delay-repay",null,null,false],
+  ["Nottingham","NOT","East Midlands Railway","https://www.eastmidlandsrailway.co.uk/help-and-support/compensation/delay-repay",null,null,false],
+  ["Oxford","OXF","Great Western Railway","https://www.gwr.com/help-and-support/refunds-and-compensation/delay-repay","https://www.gwr.com/globalassets/documents/refunds/delay-repay-claim-form.pdf","Freepost GWR Customer Support",false],
+  ["Portsmouth Harbour","PMH","South Western Railway","https://www.southwesternrailway.com/help-and-support/compensation/delay-repay",null,null,false],
+  ["Reading","RDG","Great Western Railway","https://www.gwr.com/help-and-support/refunds-and-compensation/delay-repay","https://www.gwr.com/globalassets/documents/refunds/delay-repay-claim-form.pdf","Freepost GWR Customer Support",false],
+  ["Redhill","RDH","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Sevenoaks","SEV","Southeastern","https://www.southeasternrailway.co.uk/help-and-support/delay-repay","https://www.southeasternrailway.co.uk/globalassets/documents/help-and-support/delay-repay-form.pdf","Freepost SOUTHEASTERN RAILWAY",true],
+  ["Sheffield","SHF","East Midlands Railway","https://www.eastmidlandsrailway.co.uk/help-and-support/compensation/delay-repay",null,null,false],
+  ["Southampton Central","SOU","South Western Railway","https://www.southwesternrailway.com/help-and-support/compensation/delay-repay",null,null,false],
+  ["Stevenage","SVG","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Sutton","SUO","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Three Bridges","TBD","Southern","https://delayrepay.southernrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["Tonbridge","TON","Southeastern","https://www.southeasternrailway.co.uk/help-and-support/delay-repay","https://www.southeasternrailway.co.uk/globalassets/documents/help-and-support/delay-repay-form.pdf","Freepost SOUTHEASTERN RAILWAY",true],
+  ["Worthing","WRH","Southern","https://delayrepay.southernrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+  ["York","YRK","LNER","https://www.lner.co.uk/help/delays-and-disruption/delay-repay/",null,null,false]
+];
+
+const TICKET_LABELS = {
+  anytime_return:'Anytime Return',anytime_single:'Anytime Single',
+  offpeak_return:'Off-Peak Return',offpeak_single:'Off-Peak Single',
+  superoffpeak_return:'Super Off-Peak Return',superoffpeak_single:'Super Off-Peak Single',
+  advance_single:'Advance Single',
+  season_weekly:'Season (Weekly)',season_monthly:'Season (Monthly)',season_annual:'Season (Annual)'
+};
+
+let selFrom = null, selTo = null;
+let hiIdx = {from:-1, to:-1};
+
+function setupAC(side) {
+  const inp = document.getElementById(side+'Input');
+  const list = document.getElementById(side+'List');
+
+  inp.addEventListener('input', function() {
+    const q = this.value.trim().toLowerCase();
+    if (side==='from') selFrom=null; else selTo=null;
+    document.getElementById(side+'Conf').classList.remove('show');
+    if (q.length < 2) { list.classList.remove('open'); return; }
+    const matches = STATIONS.filter(s => s[0].toLowerCase().startsWith(q)).slice(0,8);
+    if (!matches.length) { list.classList.remove('open'); return; }
+    list.innerHTML = '';
+    matches.forEach((s,i) => {
+      const el = document.createElement('div');
+      el.className = 'ac-item';
+      el.innerHTML = '<span>'+s[0]+'</span><span class="ac-toc">'+s[2]+'</span>';
+      el.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        selectStation(side, s);
+      });
+      list.appendChild(el);
+    });
+    list.classList.add('open');
+    hiIdx[side] = -1;
+  });
+
+  inp.addEventListener('keydown', function(e) {
+    const items = list.querySelectorAll('.ac-item');
+    if (!items.length) return;
+    if (e.key==='ArrowDown') { hiIdx[side]=Math.min(hiIdx[side]+1,items.length-1); }
+    else if (e.key==='ArrowUp') { hiIdx[side]=Math.max(hiIdx[side]-1,0); }
+    else if (e.key==='Enter' && hiIdx[side]>=0) {
+      const q = inp.value.trim().toLowerCase();
+      const matches = STATIONS.filter(s=>s[0].toLowerCase().startsWith(q));
+      if (matches[hiIdx[side]]) selectStation(side, matches[hiIdx[side]]);
+      return;
+    } else return;
+    items.forEach((el,i)=>el.classList.toggle('hi',i===hiIdx[side]));
+    e.preventDefault();
+  });
+
+  inp.addEventListener('blur', function() {
+    setTimeout(()=>list.classList.remove('open'), 150);
+  });
+}
+
+function selectStation(side, s) {
+  document.getElementById(side+'Input').value = s[0];
+  document.getElementById(side+'List').classList.remove('open');
+  document.getElementById(side+'ConfTxt').textContent = s[2];
+  document.getElementById(side+'Conf').classList.add('show');
+  const obj = {name:s[0],toc:s[2],url:s[3],postalUrl:s[4],freepost:s[5],guestOnline:s[6]};
+  if (side==='from') selFrom=obj;
+  else selTo=obj;
+}
+
+setupAC('from');
+setupAC('to');
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.ac-wrap')) {
+    document.querySelectorAll('.ac-list').forEach(l=>l.classList.remove('open'));
+  }
+});
+
+function onTicketChange() {
+  const v = document.getElementById('ticketType').value;
+  const isSeason = v.startsWith('season');
+  document.getElementById('seasonHint').style.display = isSeason?'block':'none';
+  document.getElementById('priceLbl').innerHTML = isSeason
+    ? 'Weekly ticket cost <span class="req">required</span>'
+    : 'Ticket price <span class="req">required</span>';
+}
+
+function toMins(t) {
+  if (!t) return null;
+  const p = t.split(':').map(Number);
+  return p[0]*60+p[1];
+}
+
+function fmtDelay(m) {
+  if (m<=0) return 'On time';
+  return m+' min'+(m!==1?'s':'');
+}
+
+function calcComp(delayMins, price, ticketType, pax) {
+  const isSeason = ticketType.startsWith('season');
+  const isReturn = ticketType.endsWith('_return');
+  let base, pct, tier;
+
+  if (isSeason) {
+    base = ticketType==='season_weekly' ? price/5
+         : ticketType==='season_monthly' ? (price*12)/52/5
+         : price/52/5;
+  } else {
+    base = isReturn ? price/2 : price;
+  }
+
+  if (delayMins<15) return {amount:0,perPax:0,pct:0,tier:'Under 15 mins — not eligible'};
+  else if (delayMins<30) { pct=25; tier='15–29 min delay'; }
+  else if (delayMins<60) { pct=50; tier='30–59 min delay'; }
+  else if (delayMins<120) { pct=100; tier='60–119 min delay'; }
+  else { pct=100; base=isSeason?base:price; tier='120+ min delay — full ticket'; }
+
+  const perPax = parseFloat((base*pct/100).toFixed(2));
+  return {amount:parseFloat((perPax*pax).toFixed(2)),perPax,pct,tier};
+}
+
+function calculate() {
+  const ticketType = document.getElementById('ticketType').value;
+  const price = parseFloat(document.getElementById('ticketPrice').value);
+  const pax = parseInt(document.getElementById('passengers').value)||1;
+  const schedDep = document.getElementById('schedDep').value;
+  const actDep = document.getElementById('actDep').value;
+  const schedArr = document.getElementById('schedArr').value;
+  const actArr = document.getElementById('actArr').value;
+  const err = document.getElementById('errMsg');
+
+  if (!selFrom || !selTo) {
+    err.style.display='block';
+    err.textContent='Please select stations from the dropdown list.';
+    return;
+  }
+  if (!price || !schedDep || !actArr) {
+    err.style.display='block';
+    err.textContent='Please fill in all required fields.';
+    return;
+  }
+  err.style.display='none';
+
+  // Delay calculation — best data wins
+  let delayMins = 0;
+  if (schedArr && actArr) {
+    delayMins = Math.max(0, toMins(actArr)-toMins(schedArr));
+  } else if (schedDep && actDep && actArr) {
+    delayMins = Math.max(0, toMins(actDep)-toMins(schedDep));
+  } else if (schedDep && actDep) {
+    delayMins = Math.max(0, toMins(actDep)-toMins(schedDep));
+  }
+
+  const {amount,perPax,pct,tier} = calcComp(delayMins,price,ticketType,pax);
+  const operator = selTo.toc || selFrom.toc;
+  const claimUrl = selTo.url || selFrom.url;
+
+  document.getElementById('resAmt').textContent = amount>0?'£'+amount.toFixed(2):'No claim';
+  document.getElementById('resAmt').className = 'result-amount'+(amount===0?' zero':'');
+  document.getElementById('resTier').textContent = tier;
+  document.getElementById('opBadge').textContent = operator;
+  document.getElementById('dRoute').textContent = selFrom.name+' → '+selTo.name;
+  document.getElementById('dTicket').textContent = TICKET_LABELS[ticketType]+' · £'+price.toFixed(2);
+  document.getElementById('dDelay').textContent = fmtDelay(delayMins);
+  document.getElementById('dRate').textContent = amount>0?pct+'% of single fare value':'—';
+  document.getElementById('dPer').textContent = amount>0?'£'+perPax.toFixed(2):'—';
+
+  const totalRow = document.getElementById('dTotalRow');
+  if (pax>1&&amount>0) {
+    totalRow.style.display='flex';
+    document.getElementById('dPax').textContent=pax;
+    document.getElementById('dTotal').textContent='£'+amount.toFixed(2);
+  } else {
+    totalRow.style.display='none';
+  }
+
+  const claimOptions = document.getElementById('claimOptions');
+  const notEligible = document.getElementById('notEligible');
+
+  if (amount>0) {
+    claimOptions.style.display='block';
+    notEligible.style.display='none';
+
+    // Online button
+    const onlineBtn = document.getElementById('claimOnline');
+    onlineBtn.href = claimUrl;
+    onlineBtn.textContent = '🌐 Claim online with '+operator+' →';
+
+    // Guest note
+    const guestNote = document.getElementById('guestNote');
+    guestNote.style.display = selTo.guestOnline ? 'block' : 'none';
+
+    // Postal
+    const postalBtn = document.getElementById('claimPost');
+    const freepostAddr = document.getElementById('freepostAddr');
+    const postalNote = document.getElementById('postalNote');
+    const noPostNote = document.getElementById('noPostNote');
+    if (selTo.postalUrl) {
+      postalBtn.style.display='block';
+      postalBtn.href=selTo.postalUrl;
+      freepostAddr.style.display='block';
+      freepostAddr.textContent = selTo.freepost ? '📮 '+selTo.freepost : '';
+      postalNote.style.display='block';
+      noPostNote.style.display='none';
+    } else {
+      postalBtn.style.display='none';
+      freepostAddr.style.display='none';
+      postalNote.style.display='none';
+      noPostNote.style.display='block';
+    }
+  } else {
+    claimOptions.style.display='none';
+    notEligible.style.display='block';
+  }
+
+  document.getElementById('formCard').classList.add('hidden');
+  document.getElementById('resultCard').style.display='block';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function reset() {
+  selFrom=null; selTo=null;
+  document.getElementById('fromConf').classList.remove('show');
+  document.getElementById('toConf').classList.remove('show');
+  document.getElementById('fromInput').value='';
+  document.getElementById('toInput').value='';
+  document.getElementById('formCard').classList.remove('hidden');
+  document.getElementById('resultCard').style.display='none';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>
