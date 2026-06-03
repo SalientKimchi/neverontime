@@ -31,8 +31,8 @@ exports.handler = async (event) => {
   const soapBody = `<?xml version="1.0" encoding="utf-8"?>
 <SOAP-ENV:Envelope 
   xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
-  xmlns:ns1="http://thalesgroup.com/RTTI/2014-02-20/ldb/"
-  xmlns:ns2="http://thalesgroup.com/RTTI/2010-11-01/ldb/commontypes">
+  xmlns:ns1="http://thalesgroup.com/RTTI/2021-11-01/ldb/"
+  xmlns:ns2="http://thalesgroup.com/RTTI/2013-11-28/Token/types">
   <SOAP-ENV:Header>
     <ns2:AccessToken>
       <ns2:TokenValue>${TOKEN}</ns2:TokenValue>
@@ -51,11 +51,12 @@ exports.handler = async (event) => {
 </SOAP-ENV:Envelope>`;
 
   try {
-    const response = await fetch('https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb9.asmx', {
+    const response = await fetch('https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx', {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': 'http://thalesgroup.com/RTTI/2014-02-20/ldb/GetDepartureBoard',
+        // SOAPAction must be quoted per SOAP spec
+        'SOAPAction': '"http://thalesgroup.com/RTTI/2021-11-01/ldb/GetDepartureBoard"',
       },
       body: soapBody,
     });
