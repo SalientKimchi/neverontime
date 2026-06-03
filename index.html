@@ -113,6 +113,18 @@
     <input type="date" id="travelDate" max="">
   </div>
 
+  <div class="two-col">
+    <div class="field">
+      <label>Approximate departure time <span class="req">required</span></label>
+      <input type="time" id="approxTime" onchange="maybeLoadTrains()">
+    </div>
+    <div class="field" style="display:flex;align-items:flex-end;padding-bottom:0;">
+      <button onclick="maybeLoadTrains()" style="width:100%;background:var(--surface2);color:var(--accent2);border:1.5px solid var(--accent2);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:0.9rem;padding:13px;cursor:pointer;">
+        Find trains →
+      </button>
+    </div>
+  </div>
+
   <div class="field" id="trainPickerField" style="display:none;">
     <label>Select your train <span class="req">required</span></label>
     <select id="trainPicker" onchange="onTrainSelected()">
@@ -323,7 +335,6 @@ function selectStation(side, s) {
   const obj = {name:s[0],crs:s[1],toc:s[2],url:s[3],postalUrl:s[4],freepost:s[5],guestOnline:s[6]};
   if (side==='from') selFrom=obj;
   else selTo=obj;
-  maybeLoadTrains();
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -399,15 +410,16 @@ document.addEventListener('DOMContentLoaded', function() {
 // Trigger train lookup when date changes or stations are confirmed
 function maybeLoadTrains() {
   const date = document.getElementById('travelDate').value;
-  if (!selFrom || !selTo || !date) return;
-  loadTrains(selFrom.crs, selTo.crs, date);
+  const time = document.getElementById('approxTime').value;
+  if (!selFrom || !selTo || !date || !time) return;
+  loadTrains(selFrom.crs, selTo.crs, date, time);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('travelDate').addEventListener('change', maybeLoadTrains);
 });
 
-async function loadTrains(fromCRS, toCRS, date) {
+async function loadTrains(fromCRS, toCRS, date, time) {
   const picker = document.getElementById('trainPicker');
   const field = document.getElementById('trainPickerField');
   const note = document.getElementById('trainPickerNote');
@@ -418,7 +430,10 @@ async function loadTrains(fromCRS, toCRS, date) {
 
   try {
     // Darwin LDB is live only — date param kept for future HSP integration
-    const res = await fetch(`/.netlify/functions/trains?from=${fromCRS}&to=${toCRS}`);
+    // Convert HH:MM to HHMM for Darwin timeOffset calculation
+    const [h, m] = time.split(':').map(Number);
+    const timeParam = time ? `&time=${h.toString().padStart(2,'0')}${m.toString().padStart(2,'0')}` : '';
+    const res = await fetch(`/.netlify/functions/trains?from=${fromCRS}&to=${toCRS}${timeParam}`);
     const data = await res.json();
 
     if (!data.services || !data.services.length) {
