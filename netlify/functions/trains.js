@@ -19,18 +19,14 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Token not configured' }) };
   }
 
-  // Calculate time offset from now if time provided
+  // Calculate time offset from now
   let timeOffset = 0;
   let timeWindow = 120;
   if (time && time.length === 4) {
-    const reqHour = parseInt(time.slice(0, 2));
-    const reqMin = parseInt(time.slice(2, 4));
     const now = new Date();
     const nowMins = now.getHours() * 60 + now.getMinutes();
-    const reqMins = reqHour * 60 + reqMin;
-    timeOffset = reqMins - nowMins;
-    // Clamp to Darwin's allowed range (-120 to 120)
-    timeOffset = Math.max(-120, Math.min(120, timeOffset));
+    const reqMins = parseInt(time.slice(0,2)) * 60 + parseInt(time.slice(2,4));
+    timeOffset = Math.max(-120, Math.min(120, reqMins - nowMins));
     timeWindow = 90;
   }
 
@@ -45,14 +41,14 @@ exports.handler = async (event) => {
     </typ:AccessToken>
   </soap:Header>
   <soap:Body>
-    <ldb:GetDepBoardWithDetailsRequest>
+    <ldb:GetDepartureBoardRequest>
       <ldb:numRows>20</ldb:numRows>
       <ldb:crs>${from.toUpperCase()}</ldb:crs>
       <ldb:filterCrs>${to.toUpperCase()}</ldb:filterCrs>
       <ldb:filterType>to</ldb:filterType>
       <ldb:timeOffset>${timeOffset}</ldb:timeOffset>
       <ldb:timeWindow>${timeWindow}</ldb:timeWindow>
-    </ldb:GetDepBoardWithDetailsRequest>
+    </ldb:GetDepartureBoardRequest>
   </soap:Body>
 </soap:Envelope>`;
 
@@ -61,14 +57,14 @@ exports.handler = async (event) => {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': 'http://thalesgroup.com/RTTI/2021-11-01/ldb/GetDepBoardWithDetails',
+        'SOAPAction': 'http://thalesgroup.com/RTTI/2021-11-01/ldb/GetDepartureBoard',
       },
       body: soapBody,
     });
 
     const xml = await response.text();
-    console.log('Darwin response status:', response.status);
-    console.log('Darwin XML snippet:', xml.slice(0, 800));
+    console.log('Darwin status:', response.status);
+    console.log('Darwin XML:', xml.slice(0, 800));
 
     const services = [];
     const regex = /<(?:\w+:)?service\b[^>]*>([\s\S]*?)<\/(?:\w+:)?service>/g;
@@ -80,7 +76,6 @@ exports.handler = async (event) => {
         const m = block.match(new RegExp(`<(?:\\w+:)?${tag}[^>]*>(.*?)<\\/(?:\\w+:)?${tag}>`, 's'));
         return m ? m[1].trim() : null;
       };
-
       const scheduledDep = get('std');
       const estimatedDep = get('etd');
       const platform = get('platform');
@@ -95,7 +90,15 @@ exports.handler = async (event) => {
       }
     }
 
-    return { statusCode: 200, headers, body: JSON.stringify({ services, timeOffset, debug: services.length === 0 ? xml.slice(0, 800) : null }) };
+    return { 
+      statusCode: 200, 
+      headers, 
+      body: JSON.stringify({ 
+        services, 
+        timeOffset,
+        debug: services.length === 0 ? xml.slice(0, 1200) : null 
+      }) 
+    };
 
   } catch (err) {
     console.error('Error:', err.message);
