@@ -51,11 +51,11 @@ exports.handler = async (event) => {
 </SOAP-ENV:Envelope>`;
 
   try {
-    // No SOAPAction header — some implementations work without it
-    const response = await fetch('https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx', {
+    const response = await fetch('https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb9.asmx', {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': 'http://thalesgroup.com/RTTI/2014-02-20/ldb/GetDepartureBoard',
       },
       body: soapBody,
     });
@@ -91,11 +91,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({
-        services,
-        timeOffset,
-        debug: xml.slice(0, 1200)
-      })
+      body: JSON.stringify({ services, timeOffset, debug: xml.slice(0, 1200) })
     };
 
   } catch (err) {
