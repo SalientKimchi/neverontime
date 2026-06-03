@@ -1,4 +1,4 @@
-// Netlify function — Darwin LDB service details (arrival times at destination)
+// Netlify function — Darwin LDB service details
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -9,19 +9,21 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: '' };
   }
 
-  const { serviceID } = event.queryStringParameters || {};
-
+  const { serviceID, toCRS } = event.queryStringParameters || {};
   if (!serviceID) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing serviceID' }) };
   }
 
   const TOKEN = process.env.DARWIN_TOKEN;
   if (!TOKEN) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Darwin token not configured' }) };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Token not configured' }) };
   }
 
   const soapBody = `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:typ="http://thalesgroup.com/RTTI/2013-11-28/Token/types" xmlns:ldb="http://thalesgroup.com/RTTI/2021-11-01/ldb/">
+<soap:Envelope
+  xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:typ="http://thalesgroup.com/RTTI/2013-11-28/Token/types"
+  xmlns:ldb="http://thalesgroup.com/RTTI/2021-11-01/ldb/">
   <soap:Header>
     <typ:AccessToken>
       <typ:TokenValue>${TOKEN}</typ:TokenValue>
@@ -46,31 +48,33 @@ exports.handler = async (event) => {
 
     const xml = await response.text();
 
-    // Find all calling points
+    // Parse calling points
     const stops = [];
-    const stopMatches = xml.matchAll(/<lt\d+:callingPoint>([\s\S]*?)<\/lt\d+:callingPoint>/g);
+    const regex = /<(?:\w+:)?callingPoint\b[^>]*>([\s\S]*?)<\/(?:\w+:)?callingPoint>/g;
+    let match;
 
-    for (const match of stopMatches) {
+    while ((match = regex.exec(xml)) !== null) {
       const block = match[1];
-      const crs = (block.match(/<lt\d+:crs>(.*?)<\/lt\d+:crs>/) || [])[1];
-      const locationName = (block.match(/<lt\d+:locationName>(.*?)<\/lt\d+:locationName>/) || [])[1];
-      const st = (block.match(/<lt\d+:st>(.*?)<\/lt\d+:st>/) || [])[1]; // scheduled time
-      const et = (block.match(/<lt\d+:et>(.*?)<\/lt\d+:et>/) || [])[1]; // estimated time
-      const at = (block.match(/<lt\d+:at>(.*?)<\/lt\d+:at>/) || [])[1]; // actual time
+      const get = (tag) => {
+        const m = block.match(new RegExp(`<(?:\\w+:)?${tag}[^>]*>(.*?)<\\/(?:\\w+:)?${tag}>`));
+        return m ? m[1].trim() : null;
+      };
+      const crs = get('crs');
+      const locationName = get('locationName');
+      const st = get('st');
+      const et = get('et');
+      const at = get('at');
       if (crs) stops.push({ crs, locationName, scheduledArr: st, estimatedArr: et, actualArr: at });
     }
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ stops })
-    };
+    // Find destination stop
+    const destStop = toCRS
+      ? stops.find(s => s.crs === toCRS.toUpperCase()) || stops[stops.length - 1]
+      : stops[stops.length - 1];
+
+    return { statusCode: 200, headers, body: JSON.stringify({ stops, destStop: destStop || null }) };
 
   } catch (err) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Darwin API error', detail: err.message })
-    };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
   }
 };
