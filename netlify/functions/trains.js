@@ -9,7 +9,6 @@ exports.handler = async (event) => {
   }
 
   const { from, to, time } = event.queryStringParameters || {};
-
   if (!from || !to) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing from/to' }) };
   }
@@ -19,7 +18,6 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Token not configured' }) };
   }
 
-  // Calculate time offset from now
   let timeOffset = 0;
   let timeWindow = 120;
   if (time && time.length === 4) {
@@ -30,34 +28,35 @@ exports.handler = async (event) => {
     timeWindow = 90;
   }
 
+  // Use 2017-10-01 namespace which is confirmed working
   const soapBody = `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope 
-  xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
-  xmlns:typ="http://thalesgroup.com/RTTI/2013-11-28/Token/types"
-  xmlns:ldb="http://thalesgroup.com/RTTI/2021-11-01/ldb/">
-  <soap:Header>
-    <typ:AccessToken>
-      <typ:TokenValue>${TOKEN}</typ:TokenValue>
-    </typ:AccessToken>
-  </soap:Header>
-  <soap:Body>
-    <ldb:GetDepartureBoardRequest>
-      <ldb:numRows>20</ldb:numRows>
-      <ldb:crs>${from.toUpperCase()}</ldb:crs>
-      <ldb:filterCrs>${to.toUpperCase()}</ldb:filterCrs>
-      <ldb:filterType>to</ldb:filterType>
-      <ldb:timeOffset>${timeOffset}</ldb:timeOffset>
-      <ldb:timeWindow>${timeWindow}</ldb:timeWindow>
-    </ldb:GetDepartureBoardRequest>
-  </soap:Body>
-</soap:Envelope>`;
+<SOAP-ENV:Envelope 
+  xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:ns1="http://thalesgroup.com/RTTI/2017-10-01/ldb/"
+  xmlns:ns2="http://thalesgroup.com/RTTI/2013-11-28/Token/types">
+  <SOAP-ENV:Header>
+    <ns2:AccessToken>
+      <ns2:TokenValue>${TOKEN}</ns2:TokenValue>
+    </ns2:AccessToken>
+  </SOAP-ENV:Header>
+  <SOAP-ENV:Body>
+    <ns1:GetDepartureBoardRequest>
+      <ns1:numRows>20</ns1:numRows>
+      <ns1:crs>${from.toUpperCase()}</ns1:crs>
+      <ns1:filterCrs>${to.toUpperCase()}</ns1:filterCrs>
+      <ns1:filterType>to</ns1:filterType>
+      <ns1:timeOffset>${timeOffset}</ns1:timeOffset>
+      <ns1:timeWindow>${timeWindow}</ns1:timeWindow>
+    </ns1:GetDepartureBoardRequest>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>`;
 
   try {
     const response = await fetch('https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx', {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': 'http://thalesgroup.com/RTTI/2021-11-01/ldb/GetDepartureBoard',
+        'SOAPAction': 'http://thalesgroup.com/RTTI/2017-10-01/ldb/GetDepartureBoard',
       },
       body: soapBody,
     });
@@ -90,14 +89,14 @@ exports.handler = async (event) => {
       }
     }
 
-    return { 
-      statusCode: 200, 
-      headers, 
-      body: JSON.stringify({ 
-        services, 
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        services,
         timeOffset,
-        debug: services.length === 0 ? xml.slice(0, 1200) : null 
-      }) 
+        debug: services.length === 0 ? xml.slice(0, 1200) : null
+      })
     };
 
   } catch (err) {
