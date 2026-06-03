@@ -1,5 +1,5 @@
-// Netlify function — Darwin LDB proxy for departures
-// Uses National Rail Live Departure Boards SOAP API
+// Netlify function — Darwin LDB proxy
+// Darwin LDB SOAP API v2021-11-01
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -10,34 +10,36 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: '' };
   }
 
-  const { from, to, time } = event.queryStringParameters || {};
+  const { from, to } = event.queryStringParameters || {};
 
   if (!from || !to) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing from/to parameters' }) };
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing from/to' }) };
   }
 
   const TOKEN = process.env.DARWIN_TOKEN;
   if (!TOKEN) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Darwin token not configured' }) };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Token not configured' }) };
   }
 
-  // Darwin LDB SOAP request for departures from station filtered to destination
   const soapBody = `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:typ="http://thalesgroup.com/RTTI/2013-11-28/Token/types" xmlns:ldb="http://thalesgroup.com/RTTI/2021-11-01/ldb/">
+<soap:Envelope 
+  xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:typ="http://thalesgroup.com/RTTI/2013-11-28/Token/types"
+  xmlns:ldb="http://thalesgroup.com/RTTI/2021-11-01/ldb/">
   <soap:Header>
     <typ:AccessToken>
       <typ:TokenValue>${TOKEN}</typ:TokenValue>
     </typ:AccessToken>
   </soap:Header>
   <soap:Body>
-    <ldb:GetDepartureBoardRequest>
+    <ldb:GetDepBoardWithDetailsRequest>
       <ldb:numRows>20</ldb:numRows>
       <ldb:crs>${from.toUpperCase()}</ldb:crs>
       <ldb:filterCrs>${to.toUpperCase()}</ldb:filterCrs>
       <ldb:filterType>to</ldb:filterType>
       <ldb:timeOffset>-120</ldb:timeOffset>
       <ldb:timeWindow>240</ldb:timeWindow>
-    </ldb:GetDepartureBoardRequest>
+    </ldb:GetDepBoardWithDetailsRequest>
   </soap:Body>
 </soap:Envelope>`;
 
@@ -46,54 +48,54 @@ exports.handler = async (event) => {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': 'http://thalesgroup.com/RTTI/2021-11-01/ldb/GetDepartureBoard',
+        'SOAPAction': 'http://thalesgroup.com/RTTI/2021-11-01/ldb/GetDepBoardWithDetails',
       },
       body: soapBody,
     });
 
     const xml = await response.text();
 
-    // Parse services from XML
+    if (!response.ok) {
+      return { statusCode: response.status, headers, body: JSON.stringify({ error: 'Darwin error', xml: xml.slice(0, 500) }) };
+    }
+
+    // Parse services
     const services = [];
-    const serviceMatches = xml.matchAll(/<lt\d+:service>([\s\S]*?)<\/lt\d+:service>/g);
+    const regex = /<(?:\w+:)?service\b[^>]*>([\s\S]*?)<\/(?:\w+:)?service>/g;
+    let match;
 
-    for (const match of serviceMatches) {
+    while ((match = regex.exec(xml)) !== null) {
       const block = match[1];
-      const scheduledDep = (block.match(/<lt\d+:std>(.*?)<\/lt\d+:std>/) || [])[1];
-      const estimatedDep = (block.match(/<lt\d+:etd>(.*?)<\/lt\d+:etd>/) || [])[1];
-      const platform = (block.match(/<lt\d+:platform>(.*?)<\/lt\d+:platform>/) || [])[1];
-      const operator = (block.match(/<lt\d+:operator>(.*?)<\/lt\d+:operator>/) || [])[1];
-      const serviceID = (block.match(/<lt\d+:serviceID>(.*?)<\/lt\d+:serviceID>/) || [])[1];
-      const isCancelled = block.includes('<lt') && block.includes('isCancelled="true"');
+      const get = (tag) => {
+        const m = block.match(new RegExp(`<(?:\\w+:)?${tag}[^>]*>(.*?)<\\/(?:\\w+:)?${tag}>`, 's'));
+        return m ? m[1].trim() : null;
+      };
 
-      // Get destination
-      const destMatch = block.match(/<lt\d+:destination>[\s\S]*?<lt\d+:locationName>(.*?)<\/lt\d+:locationName>/);
-      const destination = destMatch ? destMatch[1] : to;
+      const scheduledDep = get('std');
+      const estimatedDep = get('etd');
+      const platform = get('platform');
+      const operator = get('operator');
+      const serviceID = get('serviceID');
+      const isCancelled = /isCancelled="true"/.test(block) || /isCircularRoute/.test(block) && get('etd') === 'Cancelled';
+
+      // Get destination name
+      const destMatch = block.match(/<(?:\w+:)?destination[^>]*>[\s\S]*?<(?:\w+:)?locationName>(.*?)<\/(?:\w+:)?locationName>/);
+      const destination = destMatch ? destMatch[1] : to.toUpperCase();
 
       if (scheduledDep) {
-        services.push({
-          scheduledDep,
-          estimatedDep: estimatedDep || 'On time',
-          platform: platform || null,
-          operator: operator || null,
-          serviceID: serviceID || null,
-          destination,
-          cancelled: isCancelled,
-        });
+        services.push({ scheduledDep, estimatedDep: estimatedDep || 'On time', platform, operator, serviceID, destination, cancelled: isCancelled });
       }
     }
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ services })
-    };
+    // If no services parsed, return raw snippet for debugging
+    if (!services.length) {
+      const snippet = xml.slice(0, 1000);
+      return { statusCode: 200, headers, body: JSON.stringify({ services: [], debug: snippet }) };
+    }
+
+    return { statusCode: 200, headers, body: JSON.stringify({ services }) };
 
   } catch (err) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Darwin API error', detail: err.message })
-    };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
   }
 };
