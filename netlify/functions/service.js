@@ -1,4 +1,4 @@
-// Netlify function — Darwin LDB service details
+// HSP service details — gets actual arrival at destination for a specific service
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -9,72 +9,56 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: '' };
   }
 
-  const { serviceID, toCRS } = event.queryStringParameters || {};
-  if (!serviceID) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing serviceID' }) };
+  const { rid, toCRS } = event.queryStringParameters || {};
+
+  if (!rid) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing rid' }) };
   }
 
-  const TOKEN = process.env.DARWIN_TOKEN;
-  if (!TOKEN) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Token not configured' }) };
-  }
+  const USERNAME = process.env.NRE_USERNAME;
+  const PASSWORD = process.env.NRE_PASSWORD;
 
-  const soapBody = `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope
-  xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
-  xmlns:typ="http://thalesgroup.com/RTTI/2013-11-28/Token/types"
-  xmlns:ldb="http://thalesgroup.com/RTTI/2021-11-01/ldb/">
-  <soap:Header>
-    <typ:AccessToken>
-      <typ:TokenValue>${TOKEN}</typ:TokenValue>
-    </typ:AccessToken>
-  </soap:Header>
-  <soap:Body>
-    <ldb:GetServiceDetailsRequest>
-      <ldb:serviceID>${serviceID}</ldb:serviceID>
-    </ldb:GetServiceDetailsRequest>
-  </soap:Body>
-</soap:Envelope>`;
+  if (!USERNAME || !PASSWORD) {
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'NRE credentials not configured' }) };
+  }
 
   try {
-    const response = await fetch('https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx', {
+    const auth = Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64');
+    const response = await fetch('https://hsp-prod.rockshore.net/api/v1/serviceDetails', {
       method: 'POST',
       headers: {
-        'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': 'http://thalesgroup.com/RTTI/2021-11-01/ldb/GetServiceDetails',
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${auth}`,
       },
-      body: soapBody,
+      body: JSON.stringify({ rid }),
     });
 
-    const xml = await response.text();
+    const data = await response.json();
+    console.log('HSP service status:', response.status);
 
-    // Parse calling points
-    const stops = [];
-    const regex = /<(?:\w+:)?callingPoint\b[^>]*>([\s\S]*?)<\/(?:\w+:)?callingPoint>/g;
-    let match;
-
-    while ((match = regex.exec(xml)) !== null) {
-      const block = match[1];
-      const get = (tag) => {
-        const m = block.match(new RegExp(`<(?:\\w+:)?${tag}[^>]*>(.*?)<\\/(?:\\w+:)?${tag}>`));
-        return m ? m[1].trim() : null;
-      };
-      const crs = get('crs');
-      const locationName = get('locationName');
-      const st = get('st');
-      const et = get('et');
-      const at = get('at');
-      if (crs) stops.push({ crs, locationName, scheduledArr: st, estimatedArr: et, actualArr: at });
+    if (!response.ok) {
+      return { statusCode: response.status, headers, body: JSON.stringify({ error: 'HSP error', detail: data }) };
     }
 
-    // Find destination stop
+    const stops = (data.serviceAttributesDetails?.locations || []).map(loc => ({
+      crs: loc.location,
+      scheduledArr: loc.gbtt_ptd ? loc.gbtt_ptd.slice(0,2)+':'+loc.gbtt_ptd.slice(2) : null,
+      actualArr: loc.actual_ta ? loc.actual_ta.slice(0,2)+':'+loc.actual_ta.slice(2) : null,
+      scheduledDep: loc.gbtt_ptd ? loc.gbtt_ptd.slice(0,2)+':'+loc.gbtt_ptd.slice(2) : null,
+    }));
+
     const destStop = toCRS
       ? stops.find(s => s.crs === toCRS.toUpperCase()) || stops[stops.length - 1]
       : stops[stops.length - 1];
 
-    return { statusCode: 200, headers, body: JSON.stringify({ stops, destStop: destStop || null }) };
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ stops, destStop })
+    };
 
   } catch (err) {
+    console.error('Error:', err.message);
     return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
   }
 };
