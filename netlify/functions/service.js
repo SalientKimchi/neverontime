@@ -8,10 +8,10 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: '' };
   }
 
-  const { rid, toCRS } = event.queryStringParameters || {};
+  const { from, to, date, time } = event.queryStringParameters || {};
 
-  if (!rid) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing rid' }) };
+  if (!from || !to || !date) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing from, to, or date' }) };
   }
 
   const USERNAME = process.env.NRE_USERNAME;
@@ -21,45 +21,79 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'NRE credentials not configured' }) };
   }
 
+  // Build time window around requested time
+  const fromTime = time ? time.replace(':', '') : '0000';
+  const totalMins = parseInt(fromTime.slice(0,2)) * 60 + parseInt(fromTime.slice(2,4));
+  const startMins = Math.max(0, totalMins - 30);
+  const endMins = Math.min(1439, totalMins + 90);
+  const startTime = `${String(Math.floor(startMins/60)).padStart(2,'0')}${String(startMins%60).padStart(2,'0')}`;
+  const toTime = `${String(Math.floor(endMins/60)).padStart(2,'0')}${String(endMins%60).padStart(2,'0')}`;
+
+  // Determine if weekday or weekend
+  const d = new Date(date);
+  const dow = d.getDay();
+  const days = (dow === 0 || dow === 6) ? 'WEEKEND' : 'WEEKDAY';
+
+  const auth = Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64');
+  const body = JSON.stringify({
+    from_loc: from.toUpperCase(),
+    to_loc: to.toUpperCase(),
+    from_time: startTime,
+    to_time: toTime,
+    from_date: date,
+    to_date: date,
+    days
+  });
+
   try {
-    const auth = Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64');
-    const response = await fetch('https://hsp-prod.rockshore.net/api/v1/serviceDetails', {
+    const response = await fetch('https://hsp-prod.rockshore.net/api/v1/serviceMetrics', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Basic ${auth}`,
       },
-      body: JSON.stringify({ rid }),
+      body,
     });
 
     const data = await response.json();
-    console.log('HSP service status:', response.status);
-    console.log('HSP service data:', JSON.stringify(data).slice(0, 500));
+    console.log('HSP status:', response.status);
+    console.log('HSP services count:', data.Services?.length || 0);
 
     if (!response.ok) {
       return { statusCode: response.status, headers, body: JSON.stringify({ error: 'HSP error', detail: data }) };
     }
 
-    const fmt = t => t ? t.slice(0,2)+':'+t.slice(2) : null;
-    const locations = data.serviceAttributesDetails?.locations || [];
+    // Parse HSP response — fields are in serviceAttributesMetrics
+    const services = (data.Services || []).map(s => {
+      const attrs = s.serviceAttributesMetrics || {};
+      const metrics = (s.Metrics || [])[0] || {};
 
-    const stops = locations.map(loc => ({
-      crs: loc.location,
-      scheduledArr: fmt(loc.gbtt_pta),
-      scheduledDep: fmt(loc.gbtt_ptd),
-      actualArr: fmt(loc.actual_ta),
-      actualDep: fmt(loc.actual_td),
-    }));
+      const schedDep = attrs.gbtt_ptd; // e.g. "0944"
+      const schedArr = attrs.gbtt_pta; // e.g. "1045"
+      const rid = (attrs.rids || [])[0] || null;
+      const toc = attrs.toc_code || null;
+      const dest = attrs.destination_location || null;
+      const late = parseInt(metrics.num_not_tolerance || 0) > 0;
+      const cancelled = metrics.percent_tolerance === '0' && metrics.num_tolerance === '0';
 
-    // Find destination stop
-    const destStop = toCRS
-      ? stops.find(s => s.crs === toCRS.toUpperCase()) || stops[stops.length - 1]
-      : stops[stops.length - 1];
+      const fmt = t => t ? t.slice(0,2)+':'+t.slice(2) : null;
+
+      return {
+        scheduledDep: fmt(schedDep),
+        scheduledArr: fmt(schedArr),
+        actualArr: null, // fetched separately via service details
+        rid,
+        operator: toc,
+        destination: dest,
+        late,
+        cancelled,
+      };
+    }).filter(s => s.scheduledDep);
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ stops, destStop })
+      body: JSON.stringify({ services })
     };
 
   } catch (err) {
