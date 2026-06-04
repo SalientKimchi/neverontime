@@ -323,11 +323,15 @@ function setupAC(side) {
   const list = document.getElementById(side+'List');
 
   inp.addEventListener('input', function() {
-    const q = this.value.trim().toLowerCase();
-    if (side==='from') selFrom=null; else selTo=null;
+    const raw = this.value.trim();
+    const q = raw.toLowerCase();
+    if (side==='from') selFrom=null; else if (side==='to') selTo=null; else window[`sel_${side}`]=null;
     document.getElementById(side+'Conf').classList.remove('show');
-    if (q.length < 2) { list.classList.remove('open'); return; }
-    const matches = STATIONS.filter(s => s[0].toLowerCase().startsWith(q)).slice(0,8);
+    if (raw.length < 2) { list.classList.remove('open'); return; }
+    const isCRS = raw.length <= 3 && raw === raw.toUpperCase() && /^[A-Z]+$/.test(raw);
+    const matches = isCRS
+      ? STATIONS.filter(s => s[1].toUpperCase().startsWith(raw.toUpperCase())).slice(0,8)
+      : STATIONS.filter(s => s[0].toLowerCase().startsWith(q)).slice(0,8);
     if (!matches.length) { list.classList.remove('open'); return; }
     list.innerHTML = '';
     matches.forEach((s,i) => {
