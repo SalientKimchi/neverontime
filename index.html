@@ -197,11 +197,7 @@
   <hr class="divider">
 
   <div id="legsContainer">
-    <!-- Leg 1 is always shown, populated from main from/to fields -->
-    <div class="leg-block" id="leg1Block">
-      <div class="step-label">Leg 1</div>
-      <!-- Uses main from/to/time fields -->
-    </div>
+    <!-- Leg 1 uses the main from/to/time fields above -->
     <!-- Additional legs injected here -->
   </div>
 
@@ -329,7 +325,7 @@ function setupAC(side) {
     if (side==='from') selFrom=null; else if (side==='to') selTo=null; else window[`sel_${side}`]=null;
     document.getElementById(side+'Conf').classList.remove('show');
     if (raw.length < 2) { list.classList.remove('open'); return; }
-    const isCRS = raw.length <= 3 && raw === raw.toUpperCase() && /^[A-Z]+$/.test(raw);
+    const isCRS = raw.length <= 3 && /^[A-Za-z]+$/.test(raw) && !raw.match(/[a-z]{4,}/);
     const matches = isCRS
       ? STATIONS.filter(s => s[1].toUpperCase().startsWith(raw.toUpperCase())).slice(0,8)
       : STATIONS.filter(s => s[0].toLowerCase().startsWith(q)).slice(0,8);
