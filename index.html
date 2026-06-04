@@ -433,7 +433,7 @@ async function loadTrains(fromCRS, toCRS, date, time) {
     // Convert HH:MM to HHMM for Darwin timeOffset calculation
     const [h, m] = time.split(':').map(Number);
     const timeParam = time ? `&time=${h.toString().padStart(2,'0')}${m.toString().padStart(2,'0')}` : '';
-    const res = await fetch(`/.netlify/functions/trains?from=${fromCRS}&to=${toCRS}&date=${date}${timeParam}`);
+    const res = await fetch(`/api/trains?from=${fromCRS}&to=${toCRS}&date=${date}${timeParam}`);
     const data = await res.json();
 
     if (!data.services || !data.services.length) {
@@ -483,7 +483,7 @@ async function onTrainSelected() {
 
   note.textContent = 'Fetching arrival times...';
   try {
-    const res = await fetch(`/.netlify/functions/service?serviceID=${encodeURIComponent(service.serviceID)}`);
+    const res = await fetch(`/api/service?serviceID=${encodeURIComponent(service.serviceID)}`);
     const detail = await res.json();
 
     if (!detail.stops || !detail.stops.length) {
