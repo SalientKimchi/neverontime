@@ -1,3 +1,6 @@
+// HSP API proxy — Historical Service Performance
+// REST JSON, uses NRDP username/password
+// Docs: https://hsp-prod.rockshore.net/
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -8,95 +11,109 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: '' };
   }
 
-  const { from, to, time } = event.queryStringParameters || {};
-  if (!from || !to) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing from/to' }) };
+  const { from, to, date, time } = event.queryStringParameters || {};
+
+  if (!from || !to || !date) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing from, to, or date' }) };
   }
 
-  const TOKEN = process.env.DARWIN_TOKEN;
-  if (!TOKEN) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Token not configured' }) };
+  const USERNAME = process.env.NRE_USERNAME;
+  const PASSWORD = process.env.NRE_PASSWORD;
+
+  if (!USERNAME || !PASSWORD) {
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'NRE credentials not configured' }) };
   }
 
-  let timeOffset = 0;
-  let timeWindow = 120;
-  if (time && time.length === 4) {
-    const now = new Date();
-    const nowMins = now.getHours() * 60 + now.getMinutes();
-    const reqMins = parseInt(time.slice(0,2)) * 60 + parseInt(time.slice(2,4));
-    timeOffset = Math.max(-120, Math.min(120, reqMins - nowMins));
-    timeWindow = 90;
-  }
+  // HSP date format: YYYY-MM-DD
+  // Time window: 30 mins either side of requested time
+  const fromTime = time ? time.replace(':', '') : '0000';
+  const fromHour = parseInt(fromTime.slice(0,2));
+  const fromMin = parseInt(fromTime.slice(2,4));
+  const totalMins = fromHour * 60 + fromMin;
+  const startMins = Math.max(0, totalMins - 30);
+  const endMins = Math.min(1439, totalMins + 60);
+  const toTime = `${String(Math.floor(endMins/60)).padStart(2,'0')}${String(endMins%60).padStart(2,'0')}`;
+  const startTime = `${String(Math.floor(startMins/60)).padStart(2,'0')}${String(startMins%60).padStart(2,'0')}`;
 
-  const soapBody = `<?xml version="1.0" encoding="utf-8"?>
-<SOAP-ENV:Envelope 
-  xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
-  xmlns:ns1="http://thalesgroup.com/RTTI/2021-11-01/ldb/"
-  xmlns:ns2="http://thalesgroup.com/RTTI/2013-11-28/Token/types">
-  <SOAP-ENV:Header>
-    <ns2:AccessToken>
-      <ns2:TokenValue>${TOKEN}</ns2:TokenValue>
-    </ns2:AccessToken>
-  </SOAP-ENV:Header>
-  <SOAP-ENV:Body>
-    <ns1:GetDepartureBoardRequest>
-      <ns1:numRows>20</ns1:numRows>
-      <ns1:crs>${from.toUpperCase()}</ns1:crs>
-      <ns1:filterCrs>${to.toUpperCase()}</ns1:filterCrs>
-      <ns1:filterType>to</ns1:filterType>
-      <ns1:timeOffset>${timeOffset}</ns1:timeOffset>
-      <ns1:timeWindow>${timeWindow}</ns1:timeWindow>
-    </ns1:GetDepartureBoardRequest>
-  </SOAP-ENV:Body>
-</SOAP-ENV:Envelope>`;
+  const body = JSON.stringify({
+    from_loc: from.toUpperCase(),
+    to_loc: to.toUpperCase(),
+    from_time: startTime,
+    to_time: toTime,
+    from_date: date,
+    to_date: date,
+    days: 'WEEKDAY' // will try both
+  });
 
   try {
-    const response = await fetch('https://lite.realtime.nationalrail.co.uk/OpenLDBWS/ldb11.asmx', {
+    const auth = Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64');
+    const response = await fetch('https://hsp-prod.rockshore.net/api/v1/serviceMetrics', {
       method: 'POST',
       headers: {
-        'Content-Type': 'text/xml; charset=utf-8',
-        // SOAPAction must be quoted per SOAP spec
-        'SOAPAction': '"http://thalesgroup.com/RTTI/2021-11-01/ldb/GetDepartureBoard"',
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${auth}`,
       },
-      body: soapBody,
+      body,
     });
 
-    const xml = await response.text();
-    console.log('Darwin status:', response.status);
-    console.log('Darwin XML:', xml.slice(0, 800));
+    const data = await response.json();
+    console.log('HSP status:', response.status);
+    console.log('HSP response:', JSON.stringify(data).slice(0, 500));
 
-    const services = [];
-    const regex = /<(?:\w+:)?service\b[^>]*>([\s\S]*?)<\/(?:\w+:)?service>/g;
-    let match;
-
-    while ((match = regex.exec(xml)) !== null) {
-      const block = match[1];
-      const get = (tag) => {
-        const m = block.match(new RegExp(`<(?:\\w+:)?${tag}[^>]*>(.*?)<\\/(?:\\w+:)?${tag}>`, 's'));
-        return m ? m[1].trim() : null;
-      };
-      const scheduledDep = get('std');
-      const estimatedDep = get('etd');
-      const platform = get('platform');
-      const operator = get('operator');
-      const serviceID = get('serviceID');
-      const isCancelled = /isCancelled="true"/.test(block);
-      const destMatch = block.match(/<(?:\w+:)?destination[^>]*>[\s\S]*?<(?:\w+:)?locationName>(.*?)<\/(?:\w+:)?locationName>/);
-      const destination = destMatch ? destMatch[1] : to.toUpperCase();
-
-      if (scheduledDep) {
-        services.push({ scheduledDep, estimatedDep: estimatedDep || 'On time', platform, operator, serviceID, destination, cancelled: isCancelled });
+    if (!response.ok) {
+      // Try with WEEKEND if WEEKDAY fails
+      const body2 = JSON.stringify({
+        from_loc: from.toUpperCase(),
+        to_loc: to.toUpperCase(),
+        from_time: startTime,
+        to_time: toTime,
+        from_date: date,
+        to_date: date,
+        days: 'WEEKEND'
+      });
+      const r2 = await fetch('https://hsp-prod.rockshore.net/api/v1/serviceMetrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${auth}` },
+        body: body2,
+      });
+      const d2 = await r2.json();
+      if (!r2.ok) {
+        return { statusCode: response.status, headers, body: JSON.stringify({ error: 'HSP error', detail: data }) };
       }
+      return processHSPResponse(d2, headers);
     }
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ services, timeOffset, debug: xml.slice(0, 1200) })
-    };
+    return processHSPResponse(data, headers);
 
   } catch (err) {
     console.error('Error:', err.message);
     return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
   }
 };
+
+function processHSPResponse(data, headers) {
+  const services = (data.Services || []).map(s => {
+    const metrics = s.Metrics || {};
+    const scheduledDep = metrics.scheduled_departure || null;
+    const scheduledArr = metrics.scheduled_arrival || null;
+    const actualArr = metrics.actual_arrival || null;
+    const cancelled = metrics.CancelledEnRoute || metrics.CancelledAtOrigin || false;
+    const late = metrics.num_not_on_time > 0;
+
+    return {
+      scheduledDep: scheduledDep ? scheduledDep.slice(0,2)+':'+scheduledDep.slice(2) : null,
+      scheduledArr: scheduledArr ? scheduledArr.slice(0,2)+':'+scheduledArr.slice(2) : null,
+      actualArr: actualArr ? actualArr.slice(0,2)+':'+actualArr.slice(2) : null,
+      cancelled,
+      late,
+      serviceID: s.serviceAttributesMetrics?.rid || null,
+      operator: s.serviceAttributesMetrics?.toc_code || null,
+    };
+  }).filter(s => s.scheduledDep);
+
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({ services })
+  };
+}
