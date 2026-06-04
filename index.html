@@ -77,6 +77,22 @@
     footer{margin-top:40px;text-align:center;color:var(--muted);font-size:0.72rem;padding:0 24px;line-height:1.8;max-width:480px;}
     footer a{color:var(--muted);}
     .claim-btn.secondary{background:transparent;border:1.5px solid var(--accent2);color:var(--accent2);}
+    .leg-block{background:var(--surface2);border-radius:12px;padding:16px;margin-bottom:16px;}
+    .leg-block .step-label{margin-bottom:12px;}
+    .leg-divider{border:none;border-top:1px solid rgba(255,255,255,0.08);margin:16px 0;}
+    .claim-leg-row{padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+    .claim-leg-row:last-child{border-bottom:none;}
+    .claim-leg-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+    .claim-leg-route{font-size:0.88rem;font-weight:500;}
+    .claim-leg-amount{font-family:'Syne',sans-serif;font-weight:700;color:var(--success);font-size:1.1rem;}
+    .claim-leg-amount.zero{color:var(--muted);}
+    .claim-leg-operator{font-size:0.7rem;color:var(--accent2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}
+    .claim-leg-btn{display:block;background:var(--accent);color:white;border:none;border-radius:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:0.85rem;padding:10px 14px;text-align:center;text-decoration:none;margin-bottom:6px;cursor:pointer;}
+    .claim-leg-btn.post{background:transparent;border:1.5px solid var(--accent2);color:var(--accent2);}
+    .claim-leg-btn.disabled{background:var(--surface2);color:var(--muted);pointer-events:none;}
+    .total-row{display:flex;justify-content:space-between;align-items:center;padding:14px 0 4px;border-top:2px solid rgba(255,255,255,0.1);margin-top:8px;}
+    .total-label{font-size:0.85rem;color:var(--muted);}
+    .total-amount{font-family:'Syne',sans-serif;font-weight:800;color:var(--success);font-size:1.4rem;}
   </style>
 </head>
 <body>
@@ -165,7 +181,28 @@
     <strong>Season ticket compensation</strong> is based on your daily fare. Enter your weekly ticket cost above.
   </div>
 
+  <div class="field" style="margin-top:16px;">
+    <label>How many trains did you take? <span class="req">required</span></label>
+    <select id="numLegs" onchange="onLegsChange()">
+      <option value="1">1 train</option>
+      <option value="2">2 trains (1 change)</option>
+      <option value="3">3 trains (2 changes)</option>
+      <option value="4">4 trains (3 changes)</option>
+      <option value="5">5 trains (4 changes)</option>
+      <option value="6">6 trains (5 changes)</option>
+    </select>
+  </div>
+
   <hr class="divider">
+
+  <div id="legsContainer">
+    <!-- Leg 1 is always shown, populated from main from/to fields -->
+    <div class="leg-block" id="leg1Block">
+      <div class="step-label">Leg 1</div>
+      <!-- Uses main from/to/time fields -->
+    </div>
+    <!-- Additional legs injected here -->
+  </div>
 
   <div id="manualTimeFields">
     <div style="font-size:0.75rem;color:var(--muted);margin-bottom:12px;" id="timeFieldsNote">
@@ -334,7 +371,8 @@ function selectStation(side, s) {
   document.getElementById(side+'Conf').classList.add('show');
   const obj = {name:s[0],crs:s[1],toc:s[2],url:s[3],postalUrl:s[4],freepost:s[5],guestOnline:s[6]};
   if (side==='from') selFrom=obj;
-  else selTo=obj;
+  else if (side==='to') selTo=obj;
+  else window[`sel_${side}`]=obj;
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -511,11 +549,89 @@ async function onTrainSelected() {
   }
 }
 
+// Multi-leg support
+function onLegsChange() {
+  const n = parseInt(document.getElementById('numLegs').value);
+  const container = document.getElementById('legsContainer');
+  
+  // Remove extra leg blocks (keep leg1Block)
+  container.querySelectorAll('.extra-leg').forEach(el => el.remove());
+
+  for (let i = 2; i <= n; i++) {
+    const div = document.createElement('div');
+    div.className = 'leg-block extra-leg';
+    div.id = `leg${i}Block`;
+    div.innerHTML = `
+      <div class="step-label">Leg ${i}</div>
+      <div class="field">
+        <label>From <span class="req">required</span></label>
+        <div class="ac-wrap">
+          <input type="text" id="leg${i}FromInput" placeholder="e.g. East Croydon" autocomplete="off">
+          <div class="ac-list" id="leg${i}FromList"></div>
+        </div>
+        <div class="confirmed" id="leg${i}FromConf"><span>✓</span><span id="leg${i}FromConfTxt"></span></div>
+      </div>
+      <div class="field">
+        <label>To <span class="req">required</span></label>
+        <div class="ac-wrap">
+          <input type="text" id="leg${i}ToInput" placeholder="e.g. London Bridge" autocomplete="off">
+          <div class="ac-list" id="leg${i}ToList"></div>
+        </div>
+        <div class="confirmed" id="leg${i}ToConf"><span>✓</span><span id="leg${i}ToConfTxt"></span></div>
+      </div>
+      <div class="two-col">
+        <div class="field">
+          <label>Scheduled departure <span class="req">required</span></label>
+          <input type="time" id="leg${i}SchedDep">
+        </div>
+        <div class="field">
+          <label>Actual arrival <span class="req">required</span></label>
+          <input type="time" id="leg${i}ActArr">
+        </div>
+      </div>
+      <div class="field">
+        <label>Scheduled arrival <span class="opt">optional</span></label>
+        <input type="time" id="leg${i}SchedArr">
+      </div>
+    `;
+    container.appendChild(div);
+    setupAC(`leg${i}From`);
+    setupAC(`leg${i}To`);
+  }
+}
+
+function getLegData(i) {
+  if (i === 1) {
+    return {
+      from: selFrom,
+      to: selTo,
+      schedDep: document.getElementById('schedDep').value,
+      schedArr: document.getElementById('schedArr').value,
+      actArr: document.getElementById('actArr').value,
+    };
+  }
+  const fromKey = `leg${i}From`;
+  const toKey = `leg${i}To`;
+  return {
+    from: window[`sel_${fromKey}`] || null,
+    to: window[`sel_${toKey}`] || null,
+    schedDep: document.getElementById(`leg${i}SchedDep`)?.value || '',
+    schedArr: document.getElementById(`leg${i}SchedArr`)?.value || '',
+    actArr: document.getElementById(`leg${i}ActArr`)?.value || '',
+  };
+}
+
 let currentPostalUrl = '';
 
 function showPostalWarning() {
   if (!currentPostalUrl) return;
   document.getElementById('modalPostalLink').href = currentPostalUrl;
+  document.getElementById('postalModal').style.display = 'flex';
+}
+
+function showPostalWarningFor(url, freepost, operator) {
+  document.getElementById('modalPostalLink').href = url;
+  document.getElementById('modalPostalLink').textContent = 'Download ' + operator + ' postal form';
   document.getElementById('postalModal').style.display = 'flex';
 }
 
@@ -551,9 +667,45 @@ function calculate() {
     delayMins = Math.max(0, toMins(actDep)-toMins(schedDep));
   }
 
-  const operator = selTo.toc || selFrom.toc;
-  const claimUrl = selTo.url || selFrom.url;
-  const {amount,perPax,pct,singleFare,tier} = calcComp(delayMins,price,ticketType,pax,operator);
+  const numLegs = parseInt(document.getElementById('numLegs').value) || 1;
+  
+  // Collect all legs
+  const legs = [];
+  for (let i = 1; i <= numLegs; i++) {
+    const leg = getLegData(i);
+    if (!leg.from || !leg.to || !leg.actArr) continue;
+    
+    let legDelay = 0;
+    if (leg.schedArr && leg.actArr) {
+      legDelay = Math.max(0, toMins(leg.actArr) - toMins(leg.schedArr));
+    } else if (leg.schedDep && leg.actArr) {
+      legDelay = Math.max(0, toMins(leg.actArr) - toMins(leg.schedDep));
+    }
+    
+    const legOperator = leg.to.toc || leg.from.toc;
+    const legComp = calcComp(legDelay, price, ticketType, pax, legOperator);
+    
+    legs.push({
+      from: leg.from,
+      to: leg.to,
+      delayMins: legDelay,
+      operator: legOperator,
+      claimUrl: leg.to.url || leg.from.url,
+      postalUrl: leg.to.postalUrl || leg.from.postalUrl,
+      freepost: leg.to.freepost || leg.from.freepost,
+      guestOnline: leg.to.guestOnline || leg.from.guestOnline,
+      ...legComp,
+      legNum: i,
+    });
+  }
+
+  // Use first leg for summary (legacy)
+  const firstLeg = legs[0] || {};
+  const operator = firstLeg.operator || 'National Rail';
+  const claimUrl = firstLeg.claimUrl || '#';
+  const {amount, perPax, pct, singleFare, tier} = firstLeg.amount !== undefined ? firstLeg : calcComp(0, price, ticketType, pax, operator);
+  
+  window._legs = legs;
 
   document.getElementById('resAmt').textContent = amount>0?'£'+amount.toFixed(2):'No claim';
   document.getElementById('resAmt').className = 'result-amount'+(amount===0?' zero':'');
@@ -641,4 +793,7 @@ function reset() {
 }
 </script>
 </body>
-</html>
+</html>,
+["London Farringdon","ZFD","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+["Farringdon","ZFD","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false],
+["London Blackfriars","BKF","Thameslink","https://delayrepay.thameslinkrailway.com/","https://www.thameslinkrailway.com/-/media/goahead/gtr-all-shared-pdfs-and-documents/delay_repay_post_form.pdf","Freepost RUET-ZEJB-TKKZ, Govia Thameslink Railway, Derby DE1 9RQ",false]
