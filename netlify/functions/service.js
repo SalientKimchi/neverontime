@@ -1,4 +1,3 @@
-// HSP service details — gets actual arrival at destination for a specific service
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -35,18 +34,24 @@ exports.handler = async (event) => {
 
     const data = await response.json();
     console.log('HSP service status:', response.status);
+    console.log('HSP service data:', JSON.stringify(data).slice(0, 500));
 
     if (!response.ok) {
       return { statusCode: response.status, headers, body: JSON.stringify({ error: 'HSP error', detail: data }) };
     }
 
-    const stops = (data.serviceAttributesDetails?.locations || []).map(loc => ({
+    const fmt = t => t ? t.slice(0,2)+':'+t.slice(2) : null;
+    const locations = data.serviceAttributesDetails?.locations || [];
+
+    const stops = locations.map(loc => ({
       crs: loc.location,
-      scheduledArr: loc.gbtt_ptd ? loc.gbtt_ptd.slice(0,2)+':'+loc.gbtt_ptd.slice(2) : null,
-      actualArr: loc.actual_ta ? loc.actual_ta.slice(0,2)+':'+loc.actual_ta.slice(2) : null,
-      scheduledDep: loc.gbtt_ptd ? loc.gbtt_ptd.slice(0,2)+':'+loc.gbtt_ptd.slice(2) : null,
+      scheduledArr: fmt(loc.gbtt_pta),
+      scheduledDep: fmt(loc.gbtt_ptd),
+      actualArr: fmt(loc.actual_ta),
+      actualDep: fmt(loc.actual_td),
     }));
 
+    // Find destination stop
     const destStop = toCRS
       ? stops.find(s => s.crs === toCRS.toUpperCase()) || stops[stops.length - 1]
       : stops[stops.length - 1];
