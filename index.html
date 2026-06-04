@@ -433,7 +433,7 @@ async function loadTrains(fromCRS, toCRS, date, time) {
     // Convert HH:MM to HHMM for Darwin timeOffset calculation
     const [h, m] = time.split(':').map(Number);
     const timeParam = time ? `&time=${h.toString().padStart(2,'0')}${m.toString().padStart(2,'0')}` : '';
-    const res = await fetch(`/.netlify/functions/trains?from=${fromCRS}&to=${toCRS}${timeParam}`);
+    const res = await fetch(`/.netlify/functions/trains?from=${fromCRS}&to=${toCRS}&date=${date}${timeParam}`);
     const data = await res.json();
 
     if (!data.services || !data.services.length) {
@@ -444,9 +444,9 @@ async function loadTrains(fromCRS, toCRS, date, time) {
 
     picker.innerHTML = '<option value="">Select your train...</option>' +
       data.services.map((s, i) => {
-        const status = s.cancelled ? '❌ CANCELLED' : (s.estimatedDep && s.estimatedDep !== 'On time' ? `⚠ ${s.estimatedDep}` : '✓ On time');
-        const platform = s.platform ? ` · Plt ${s.platform}` : '';
-        return `<option value="${i}">${s.scheduledDep} → ${s.destination}${platform} — ${status}</option>`;
+        const status = s.cancelled ? '❌ CANCELLED' : (s.late ? '⚠ Was delayed' : '✓ On time');
+        const arr = s.scheduledArr ? ` → arr ${s.scheduledArr}` : '';
+        return `<option value="${i}">${s.scheduledDep}${arr} — ${status}</option>`;
       }).join('');
 
     window._darwinServices = data.services;
