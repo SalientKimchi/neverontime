@@ -468,14 +468,12 @@ async function onTrainSelected() {
 
   const note = document.getElementById('timeFieldsNote');
 
-  // Set scheduled departure
+  // Set scheduled departure and arrival from HSP data
   if (service.scheduledDep) {
     document.getElementById('schedDep').value = service.scheduledDep;
   }
-
-  // Set estimated/actual departure if not "On time"
-  if (service.estimatedDep && service.estimatedDep !== 'On time' && service.estimatedDep !== 'Delayed') {
-    document.getElementById('actDep').value = service.estimatedDep;
+  if (service.scheduledArr) {
+    document.getElementById('schedArr').value = service.scheduledArr;
   }
 
   if (!service.serviceID) {
